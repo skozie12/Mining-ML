@@ -121,41 +121,73 @@ def create_sample_data(output_path: Path, n_samples: int = 1000) -> pd.DataFrame
     
     df = pd.DataFrame(data)
     
-    # Generate approval status based on features (realistic simulation)
+    # Generate approval probability and time based on features (realistic simulation)
     approval_probability = np.zeros(n_samples)
+    base_approval_time = np.zeros(n_samples)
     
     for i, row in df.iterrows():
         base_prob = provinces[row['province']]
+        base_time = 12  # Base approval time in months
         
         # Adjust based on environmental factors
         if row['distance_to_protected_area'] < 10:
             base_prob -= 0.2
+            base_time += 6  # Environmental review takes longer
         if row['distance_to_water'] < 1:
             base_prob -= 0.15
+            base_time += 4  # Water impact assessment
         if row['distance_to_indigenous_land'] < 5:
             base_prob -= 0.1
+            base_time += 8  # Indigenous consultation required
             
         # Adjust based on company factors
         if row['company_compliance_history'] > 7:
             base_prob += 0.1
+            base_time -= 2  # Good history speeds up process
         if row['previous_permits'] > 5:
             base_prob += 0.05
+            base_time -= 1  # Experience helps
             
         # Adjust based on public sentiment
         if row['public_opposition_percentage'] > 50:
             base_prob -= 0.15
+            base_time += 5  # Public hearings and review
             
         # Adjust based on environmental score
         if row['environmental_assessment_score'] > 7:
             base_prob += 0.1
+            base_time -= 1  # Good environmental plan
         elif row['environmental_assessment_score'] < 4:
             base_prob -= 0.15
+            base_time += 6  # Additional environmental requirements
         
-        # Ensure probability is between 0 and 1
+        # Adjust based on project size and complexity
+        if row['project_area'] > 1000:
+            base_time += 3  # Large projects take longer
+        if row['estimated_duration'] > 15:
+            base_time += 2  # Long projects need more review
+        if row['expected_employment'] > 200:
+            base_prob += 0.05  # Economic benefits
+            
+        # Ensure probability is between 0 and 1, time between 1 and 36 months
         approval_probability[i] = np.clip(base_prob, 0, 1)
+        base_approval_time[i] = np.clip(base_time + np.random.normal(0, 2), 1, 36)
     
-    # Generate binary outcome
-    df['approved'] = (np.random.random(n_samples) < approval_probability).astype(int)
+    # Generate approval time in months (1-36 months)
+    df['approval_time_months'] = base_approval_time.round(1)
+    
+    # Generate confidence levels based on probability
+    confidence_labels = []
+    for prob in approval_probability:
+        if prob >= 0.8:
+            confidence_labels.append('High')
+        elif prob >= 0.5:
+            confidence_labels.append('Medium')
+        else:
+            confidence_labels.append('Low')
+    
+    df['approval_confidence'] = confidence_labels
+    df['approval_probability'] = approval_probability.round(3)  # Keep for reference
     
     # Add decision date (after application date)
     df['decision_date'] = pd.to_datetime(df['application_date']) + pd.to_timedelta(
@@ -168,7 +200,8 @@ def create_sample_data(output_path: Path, n_samples: int = 1000) -> pd.DataFrame
     output_file = output_path / "sample_permits.csv"
     df.to_csv(output_file, index=False)
     logger.info(f"Sample data saved to {output_file}")
-    logger.info(f"Approval rate in sample: {df['approved'].mean():.2%}")
+    logger.info(f"Average approval time: {df['approval_time_months'].mean():.1f} months")
+    logger.info(f"Confidence distribution: {df['approval_confidence'].value_counts().to_dict()}")
     
     return df
 

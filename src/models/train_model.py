@@ -12,11 +12,12 @@ import joblib
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
 
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
-    roc_auc_score, confusion_matrix, classification_report
+    roc_auc_score, confusion_matrix, classification_report,
+    mean_absolute_error, mean_squared_error, r2_score
 )
 from sklearn.model_selection import cross_val_score, GridSearchCV
 
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import xgboost as xgb
+    from xgboost import XGBClassifier, XGBRegressor
     XGBOOST_AVAILABLE = True
 except ImportError:
     XGBOOST_AVAILABLE = False
@@ -31,11 +33,146 @@ except ImportError:
 
 try:
     import lightgbm as lgb
+    from lightgbm import LGBMClassifier, LGBMRegressor
     LIGHTGBM_AVAILABLE = True
 except ImportError:
     LIGHTGBM_AVAILABLE = False
     logger.warning("LightGBM not available. Install with: pip install lightgbm")
 
+
+# ============================================================================
+# REGRESSION MODELS FOR TIME PREDICTION
+# ============================================================================
+
+def train_linear_regression(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    random_state: int = 42
+) -> LinearRegression:
+    """
+    Train a Linear Regression model for time prediction.
+    
+    Args:
+        X_train: Training features
+        y_train: Training target (approval time)
+        random_state: Random seed
+        
+    Returns:
+        Trained LinearRegression model
+    """
+    logger.info("Training Linear Regression model")
+    
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    
+    logger.info("Linear Regression training complete")
+    return model
+
+
+def train_random_forest_regressor(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    n_estimators: int = 100,
+    max_depth: Optional[int] = 10,
+    random_state: int = 42
+) -> RandomForestRegressor:
+    """
+    Train a Random Forest Regressor for time prediction.
+    
+    Args:
+        X_train: Training features
+        y_train: Training target (approval time)
+        n_estimators: Number of trees
+        max_depth: Maximum tree depth
+        random_state: Random seed
+        
+    Returns:
+        Trained RandomForestRegressor model
+    """
+    logger.info("Training Random Forest Regressor model")
+    
+    model = RandomForestRegressor(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        random_state=random_state,
+        n_jobs=-1
+    )
+    model.fit(X_train, y_train)
+    
+    logger.info("Random Forest Regressor training complete")
+    return model
+
+
+def train_xgboost_regressor(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    random_state: int = 42
+) -> Any:
+    """
+    Train an XGBoost Regressor for time prediction.
+    
+    Args:
+        X_train: Training features
+        y_train: Training target (approval time)
+        random_state: Random seed
+        
+    Returns:
+        Trained XGBRegressor model
+    """
+    if not XGBOOST_AVAILABLE:
+        raise ImportError("XGBoost is not available. Install with: pip install xgboost")
+    
+    logger.info("Training XGBoost Regressor model")
+    
+    model = XGBRegressor(
+        random_state=random_state,
+        n_estimators=100,
+        max_depth=6,
+        learning_rate=0.1
+    )
+    model.fit(X_train, y_train)
+    
+    logger.info("XGBoost Regressor training complete")
+    return model
+
+
+def train_lightgbm_regressor(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    random_state: int = 42
+) -> Any:
+    """
+    Train a LightGBM Regressor for time prediction.
+    
+    Args:
+        X_train: Training features
+        y_train: Training target (approval time)
+        random_state: Random seed
+        
+    Returns:
+        Trained LGBMRegressor model
+    """
+    if not LIGHTGBM_AVAILABLE:
+        raise ImportError("LightGBM is not available. Install with: pip install lightgbm")
+    
+    logger.info("Training LightGBM Regressor model")
+    
+    model = LGBMRegressor(
+        random_state=random_state,
+        n_estimators=100,
+        max_depth=6,
+        learning_rate=0.1,
+        verbose=-1
+    )
+    model.fit(X_train, y_train)
+    
+    logger.info("LightGBM Regressor training complete")
+    return model
+
+
+# ============================================================================
+# CLASSIFICATION MODELS FOR CONFIDENCE PREDICTION
+# ============================================================================
 
 def train_logistic_regression(
     X_train: pd.DataFrame,
@@ -187,6 +324,89 @@ def train_lightgbm(
     return model
 
 
+def evaluate_regression_model(
+    model: Any,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    model_name: str = "Regression Model"
+) -> Dict[str, float]:
+    """
+    Evaluate a trained regression model on test data.
+    
+    Args:
+        model: Trained regression model
+        X_test: Test features
+        y_test: Test target (approval time)
+        model_name: Name of the model for logging
+        
+    Returns:
+        Dictionary of regression evaluation metrics
+    """
+    logger.info(f"Evaluating {model_name}")
+    
+    # Make predictions
+    y_pred = model.predict(X_test)
+    
+    # Calculate metrics
+    metrics = {
+        'mae': mean_absolute_error(y_test, y_pred),
+        'mse': mean_squared_error(y_test, y_pred),
+        'rmse': np.sqrt(mean_squared_error(y_test, y_pred)),
+        'r2': r2_score(y_test, y_pred)
+    }
+    
+    # Log metrics
+    logger.info(f"\n{model_name} Performance:")
+    for metric_name, value in metrics.items():
+        logger.info(f"  {metric_name}: {value:.4f}")
+    
+    return metrics
+
+
+def evaluate_classification_model(
+    model: Any,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    model_name: str = "Classification Model"
+) -> Dict[str, float]:
+    """
+    Evaluate a trained classification model on test data.
+    
+    Args:
+        model: Trained classification model
+        X_test: Test features
+        y_test: Test target (confidence level)
+        model_name: Name of the model for logging
+        
+    Returns:
+        Dictionary of classification evaluation metrics
+    """
+    logger.info(f"Evaluating {model_name}")
+    
+    # Make predictions
+    y_pred = model.predict(X_test)
+    y_pred_proba = model.predict_proba(X_test)
+    
+    # Calculate metrics
+    metrics = {
+        'accuracy': accuracy_score(y_test, y_pred),
+        'precision_macro': precision_score(y_test, y_pred, average='macro', zero_division=0),
+        'recall_macro': recall_score(y_test, y_pred, average='macro', zero_division=0),
+        'f1_macro': f1_score(y_test, y_pred, average='macro', zero_division=0)
+    }
+    
+    # Log metrics
+    logger.info(f"\n{model_name} Performance:")
+    for metric_name, value in metrics.items():
+        logger.info(f"  {metric_name}: {value:.4f}")
+    
+    # Print classification report
+    logger.info(f"\nClassification Report for {model_name}:")
+    logger.info("\n" + classification_report(y_test, y_pred))
+    
+    return metrics
+
+
 def evaluate_model(
     model: Any,
     X_test: pd.DataFrame,
@@ -230,6 +450,48 @@ def evaluate_model(
     logger.info("\n" + classification_report(y_test, y_pred))
     
     return metrics
+
+
+def train_regressor(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    model_type: str = 'random_forest_regressor',
+    config: Optional[Dict] = None
+) -> Any:
+    """
+    Train a regressor based on specified model type.
+    
+    Args:
+        X_train: Training features
+        y_train: Training target (approval time)
+        model_type: Type of model to train
+        config: Configuration dictionary
+        
+    Returns:
+        Trained regression model
+    """
+    random_state = config.get('model', {}).get('random_state', 42) if config else 42
+    
+    if model_type == 'linear_regression':
+        return train_linear_regression(X_train, y_train, random_state)
+    
+    elif model_type == 'random_forest_regressor':
+        params = config.get('model', {}).get('random_forest', {}) if config else {}
+        return train_random_forest_regressor(
+            X_train, y_train,
+            n_estimators=params.get('n_estimators', 100),
+            max_depth=params.get('max_depth', 10),
+            random_state=random_state
+        )
+    
+    elif model_type == 'xgboost_regressor':
+        return train_xgboost_regressor(X_train, y_train, random_state)
+    
+    elif model_type == 'lightgbm_regressor':
+        return train_lightgbm_regressor(X_train, y_train, random_state)
+    
+    else:
+        raise ValueError(f"Unknown regressor type: {model_type}")
 
 
 def train_classifier(
@@ -339,36 +601,69 @@ if __name__ == "__main__":
     try:
         X_train = pd.read_csv(processed_path / "X_train.csv")
         X_test = pd.read_csv(processed_path / "X_test.csv")
-        y_train = pd.read_csv(processed_path / "y_train.csv")['approved']
-        y_test = pd.read_csv(processed_path / "y_test.csv")['approved']
+        y_time_train = pd.read_csv(processed_path / "y_time_train.csv")['approval_time_months']
+        y_time_test = pd.read_csv(processed_path / "y_time_test.csv")['approval_time_months']
+        y_conf_train = pd.read_csv(processed_path / "y_conf_train.csv")['approval_confidence']
+        y_conf_test = pd.read_csv(processed_path / "y_conf_test.csv")['approval_confidence']
         
-        print("Training multiple models...\n")
+        print("Training multi-target models...\n")
         
-        # Train and evaluate multiple models
-        models = {}
-        results = {}
+        # Train and evaluate time prediction models
+        time_models = {}
+        time_results = {}
+        model_path = Path(config['model']['model_path'])
         
-        for model_type in ['logistic_regression', 'random_forest']:
-            print(f"\n{'='*50}")
-            print(f"Training {model_type}...")
-            print('='*50)
+        print("="*70)
+        print("TRAINING TIME PREDICTION MODELS")
+        print("="*70)
+        
+        for model_type in config['model']['time_prediction_algorithms']:
+            print(f"\nTraining {model_type} for time prediction...")
             
-            model = train_classifier(X_train, y_train, model_type, config)
-            metrics = evaluate_model(model, X_test, y_test, model_type)
+            model = train_regressor(X_train, y_time_train, model_type, config)
+            metrics = evaluate_regression_model(model, X_test, y_time_test, model_type)
             
-            models[model_type] = model
-            results[model_type] = metrics
+            time_models[model_type] = model
+            time_results[model_type] = metrics
             
             # Save model
-            model_path = get_model_path(config)
-            save_model(model, model_path, model_type)
+            save_model(model, model_path, f"time_{model_type}")
         
-        # Find best model
-        best_model_name = max(results, key=lambda x: results[x]['roc_auc'])
-        print(f"\n{'='*50}")
-        print(f"Best model: {best_model_name}")
-        print(f"ROC-AUC: {results[best_model_name]['roc_auc']:.4f}")
-        print('='*50)
+        # Find best time model
+        best_time_model = min(time_results, key=lambda x: time_results[x]['rmse'])
+        print(f"\nBest time prediction model: {best_time_model}")
+        print(f"RMSE: {time_results[best_time_model]['rmse']:.2f} months")
+        
+        print("\n" + "="*70)
+        print("TRAINING CONFIDENCE PREDICTION MODELS")
+        print("="*70)
+        
+        # Train and evaluate confidence prediction models
+        conf_models = {}
+        conf_results = {}
+        
+        for model_type in config['model']['confidence_prediction_algorithms']:
+            print(f"\nTraining {model_type} for confidence prediction...")
+            
+            model = train_classifier(X_train, y_conf_train, model_type, config)
+            metrics = evaluate_classification_model(model, X_test, y_conf_test, model_type)
+            
+            conf_models[model_type] = model
+            conf_results[model_type] = metrics
+            
+            # Save model
+            save_model(model, model_path, f"confidence_{model_type}")
+        
+        # Find best confidence model
+        best_conf_model = max(conf_results, key=lambda x: conf_results[x]['accuracy'])
+        print(f"\nBest confidence prediction model: {best_conf_model}")
+        print(f"Accuracy: {conf_results[best_conf_model]['accuracy']:.4f}")
+        
+        print("\n" + "="*70)
+        print("TRAINING SUMMARY")
+        print("="*70)
+        print(f"Best Time Model: {best_time_model} (RMSE: {time_results[best_time_model]['rmse']:.2f} months)")
+        print(f"Best Confidence Model: {best_conf_model} (Accuracy: {conf_results[best_conf_model]['accuracy']:.4f})")
         
     except FileNotFoundError as e:
         print(f"Error: {e}")

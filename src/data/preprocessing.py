@@ -140,36 +140,41 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def prepare_for_modeling(
     df: pd.DataFrame,
-    target_column: str = 'approved',
+    time_target: str = 'approval_time_months',
+    confidence_target: str = 'approval_confidence',
     categorical_columns: Optional[List[str]] = None,
     numerical_columns: Optional[List[str]] = None,
     test_size: float = 0.2,
     random_state: int = 42
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, dict]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series, pd.Series, dict]:
     """
-    Prepare data for machine learning modeling.
+    Prepare data for multi-target machine learning modeling.
     
     Args:
         df (pd.DataFrame): Feature-engineered data
-        target_column (str): Name of the target variable
+        time_target (str): Name of the time prediction target variable
+        confidence_target (str): Name of the confidence prediction target variable
         categorical_columns (List[str]): List of categorical column names
         numerical_columns (List[str]): List of numerical column names
         test_size (float): Proportion of data for testing
         random_state (int): Random seed for reproducibility
         
     Returns:
-        Tuple containing X_train, X_test, y_train, y_test, and preprocessing info
+        Tuple containing X_train, X_test, y_time_train, y_time_test, y_conf_train, y_conf_test, and preprocessing info
     """
-    logger.info("Preparing data for modeling")
+    logger.info("Preparing data for multi-target modeling")
     
-    # Separate features and target
-    if target_column not in df.columns:
-        raise ValueError(f"Target column '{target_column}' not found in data")
+    # Separate features and targets
+    if time_target not in df.columns:
+        raise ValueError(f"Time target column '{time_target}' not found in data")
+    if confidence_target not in df.columns:
+        raise ValueError(f"Confidence target column '{confidence_target}' not found in data")
     
-    y = df[target_column]
+    y_time = df[time_target]
+    y_confidence = df[confidence_target]
     
     # Drop columns not needed for modeling
-    columns_to_drop = [target_column, 'permit_id', 'application_date', 'decision_date']
+    columns_to_drop = [time_target, confidence_target, 'permit_id', 'application_date', 'decision_date', 'approval_probability']
     X = df.drop(columns=[col for col in columns_to_drop if col in df.columns])
     
     # Identify categorical and numerical columns if not provided
@@ -190,15 +195,17 @@ def prepare_for_modeling(
             X[col] = le.fit_transform(X[col].astype(str))
             label_encoders[col] = le
     
-    # Split data
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=y
+    # Split data (stratify by confidence level)
+    X_train, X_test, y_time_train, y_time_test, y_conf_train, y_conf_test = train_test_split(
+        X, y_time, y_confidence, test_size=test_size, random_state=random_state, stratify=y_confidence
     )
     
     logger.info(f"Training set size: {len(X_train)}")
     logger.info(f"Test set size: {len(X_test)}")
-    logger.info(f"Training set approval rate: {y_train.mean():.2%}")
-    logger.info(f"Test set approval rate: {y_test.mean():.2%}")
+    logger.info(f"Training set avg time: {y_time_train.mean():.1f} months")
+    logger.info(f"Test set avg time: {y_time_test.mean():.1f} months")
+    logger.info(f"Training confidence distribution: {y_conf_train.value_counts().to_dict()}")
+    logger.info(f"Test confidence distribution: {y_conf_test.value_counts().to_dict()}")
     
     # Scale numerical features
     scaler = StandardScaler()
@@ -216,14 +223,16 @@ def prepare_for_modeling(
     
     logger.info("Data preparation complete")
     
-    return X_train, X_test, y_train, y_test, preprocessing_info
+    return X_train, X_test, y_time_train, y_time_test, y_conf_train, y_conf_test, preprocessing_info
 
 
 def save_processed_data(
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
-    y_train: pd.Series,
-    y_test: pd.Series,
+    y_time_train: pd.Series,
+    y_time_test: pd.Series,
+    y_conf_train: pd.Series,
+    y_conf_test: pd.Series,
     output_path: Path
 ) -> None:
     """
@@ -232,8 +241,10 @@ def save_processed_data(
     Args:
         X_train: Training features
         X_test: Test features
-        y_train: Training target
-        y_test: Test target
+        y_time_train: Training time target
+        y_time_test: Test time target
+        y_conf_train: Training confidence target
+        y_conf_test: Test confidence target
         output_path: Directory to save processed data
     """
     logger.info(f"Saving processed data to {output_path}")
@@ -243,8 +254,10 @@ def save_processed_data(
     # Save as CSV files
     X_train.to_csv(output_path / "X_train.csv", index=False)
     X_test.to_csv(output_path / "X_test.csv", index=False)
-    y_train.to_csv(output_path / "y_train.csv", index=False, header=['approved'])
-    y_test.to_csv(output_path / "y_test.csv", index=False, header=['approved'])
+    y_time_train.to_csv(output_path / "y_time_train.csv", index=False, header=['approval_time_months'])
+    y_time_test.to_csv(output_path / "y_time_test.csv", index=False, header=['approval_time_months'])
+    y_conf_train.to_csv(output_path / "y_conf_train.csv", index=False, header=['approval_confidence'])
+    y_conf_test.to_csv(output_path / "y_conf_test.csv", index=False, header=['approval_confidence'])
     
     logger.info("Processed data saved successfully")
 
@@ -289,11 +302,11 @@ if __name__ == "__main__":
         df = load_and_clean_data(sample_file)
         
         # Prepare for modeling
-        X_train, X_test, y_train, y_test, prep_info = prepare_for_modeling(df)
+        X_train, X_test, y_time_train, y_time_test, y_conf_train, y_conf_test, prep_info = prepare_for_modeling(df)
         
         # Save processed data
         processed_path = get_data_path(config, "processed")
-        save_processed_data(X_train, X_test, y_train, y_test, processed_path)
+        save_processed_data(X_train, X_test, y_time_train, y_time_test, y_conf_train, y_conf_test, processed_path)
         
         print("\nData preprocessing complete!")
         print(f"Training features shape: {X_train.shape}")

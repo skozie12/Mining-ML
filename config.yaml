@@ -38,16 +38,39 @@ model:
   # Cross-validation folds
   cv_folds: 5
   
-  # Models to evaluate
-  algorithms:
+  # Target variables
+  targets:
+    approval_time_months: "regression"  # Predict time to approval in months
+    approval_confidence: "classification"  # Predict confidence of approval (High/Medium/Low)
+  
+  # Models to evaluate for time prediction (regression)
+  time_prediction_algorithms:
+    - "random_forest_regressor"
+    - "xgboost_regressor"
+    - "lightgbm_regressor"
+    - "linear_regression"
+  
+  # Models to evaluate for confidence prediction (classification)
+  confidence_prediction_algorithms:
     - "logistic_regression"
-    - "random_forest"
-    - "xgboost"
-    - "lightgbm"
+    - "random_forest_classifier"
+    - "xgboost_classifier"
+    - "lightgbm_classifier"
   
   # Hyperparameter tuning
   hyperparameter_tuning:
     method: "grid_search"  # or "random_search"
+  
+  # Approval time prediction settings
+  time_prediction:
+    min_months: 1     # Minimum approval time
+    max_months: 36    # Maximum approval time
+    
+  # Confidence categories
+  confidence_levels:
+    high: ">= 80%"    # High confidence of approval
+    medium: "50-79%"  # Medium confidence of approval  
+    low: "< 50%"      # Low confidence of approval
     n_iter: 50  # for random search
   
   # Random Forest parameters

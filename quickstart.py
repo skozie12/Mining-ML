@@ -74,7 +74,8 @@ def generate_sample_data():
         
         print(f"\n✓ Successfully generated {len(df)} sample records!")
         print(f"✓ Data saved to: {raw_data_path / 'sample_permits.csv'}")
-        print(f"✓ Approval rate: {df['approved'].mean():.2%}")
+        print(f"✓ Average approval time: {df['approval_time_months'].mean():.1f} months")
+        print(f"✓ Confidence distribution: {dict(df['approval_confidence'].value_counts())}")
         
     except Exception as e:
         print(f"\n✗ Error generating sample data: {e}")
@@ -105,10 +106,10 @@ def preprocess_data():
         df = load_and_clean_data(sample_file)
         
         print("Preparing data for modeling...")
-        X_train, X_test, y_train, y_test, prep_info = prepare_for_modeling(df)
+        X_train, X_test, y_time_train, y_time_test, y_conf_train, y_conf_test, prep_info = prepare_for_modeling(df)
         
         print("Saving processed data...")
-        save_processed_data(X_train, X_test, y_train, y_test, processed_path)
+        save_processed_data(X_train, X_test, y_time_train, y_time_test, y_conf_train, y_conf_test, processed_path)
         
         print(f"\n✓ Data preprocessing complete!")
         print(f"✓ Training set: {len(X_train)} samples")
@@ -137,60 +138,80 @@ def train_models():
         # Load processed data
         X_train = pd.read_csv(processed_path / "X_train.csv")
         X_test = pd.read_csv(processed_path / "X_test.csv")
-        y_train = pd.read_csv(processed_path / "y_train.csv")['approved']
-        y_test = pd.read_csv(processed_path / "y_test.csv")['approved']
+        y_time_train = pd.read_csv(processed_path / "y_time_train.csv")['approval_time_months']
+        y_time_test = pd.read_csv(processed_path / "y_time_test.csv")['approval_time_months']
+        y_conf_train = pd.read_csv(processed_path / "y_conf_train.csv")['approval_confidence']
+        y_conf_test = pd.read_csv(processed_path / "y_conf_test.csv")['approval_confidence']
         
-        print("Available models:")
-        print("1. Logistic Regression")
-        print("2. Random Forest")
-        print("3. XGBoost (if installed)")
-        print("4. LightGBM (if installed)")
-        print("5. Train all models")
+        print("Training multi-target models...")
+        print("This will train both time prediction (regression) and confidence prediction (classification)")
         
-        choice = input("\nSelect model to train (1-5): ").strip()
-        
-        model_map = {
-            '1': 'logistic_regression',
-            '2': 'random_forest',
-            '3': 'xgboost',
-            '4': 'lightgbm'
-        }
-        
-        if choice in model_map:
-            model_types = [model_map[choice]]
-        elif choice == '5':
-            model_types = ['logistic_regression', 'random_forest']
-        else:
-            print("Invalid choice.")
+        confirm = input("\nProceed with training? (y/n): ").strip().lower()
+        if confirm != 'y':
+            print("Training cancelled.")
             return
         
-        results = {}
-        for model_type in model_types:
-            print(f"\n{'='*50}")
-            print(f"Training {model_type}...")
-            print('='*50)
-            
+        from models.train_model import train_regressor, train_classifier, evaluate_regression_model, evaluate_classification_model, save_model
+        
+        # Train time prediction models
+        print(f"\n{'='*60}")
+        print("TRAINING TIME PREDICTION MODELS")
+        print('='*60)
+        
+        time_results = {}
+        for model_type in config['model']['time_prediction_algorithms']:
+            print(f"\nTraining {model_type} for time prediction...")
             try:
-                model = train_classifier(X_train, y_train, model_type, config)
-                metrics = evaluate_model(model, X_test, y_test, model_type)
-                save_model(model, model_path, model_type)
-                results[model_type] = metrics
+                model = train_regressor(X_train, y_time_train, model_type, config)
+                metrics = evaluate_regression_model(model, X_test, y_time_test, model_type)
+                save_model(model, model_path, f"time_{model_type}")
+                time_results[model_type] = metrics
                 
-                print(f"\n✓ {model_type} trained successfully!")
-                print(f"  - Accuracy: {metrics['accuracy']:.4f}")
-                print(f"  - ROC-AUC: {metrics['roc_auc']:.4f}")
+                print(f"✓ {model_type} trained successfully!")
+                print(f"  - RMSE: {metrics['rmse']:.2f} months")
+                print(f"  - R²: {metrics['r2']:.4f}")
                 
             except Exception as e:
-                print(f"\n✗ Error training {model_type}: {e}")
+                print(f"✗ Error training {model_type}: {e}")
         
-        if results:
-            print("\n" + "="*50)
+        # Train confidence prediction models
+        print(f"\n{'='*60}")
+        print("TRAINING CONFIDENCE PREDICTION MODELS")
+        print('='*60)
+        
+        conf_results = {}
+        for model_type in config['model']['confidence_prediction_algorithms']:
+            print(f"\nTraining {model_type} for confidence prediction...")
+            try:
+                model = train_classifier(X_train, y_conf_train, model_type, config)
+                metrics = evaluate_classification_model(model, X_test, y_conf_test, model_type)
+                save_model(model, model_path, f"confidence_{model_type}")
+                conf_results[model_type] = metrics
+                
+                print(f"✓ {model_type} trained successfully!")
+                print(f"  - Accuracy: {metrics['accuracy']:.4f}")
+                print(f"  - F1-Score: {metrics['f1_macro']:.4f}")
+                
+            except Exception as e:
+                print(f"✗ Error training {model_type}: {e}")
+        
+        # Summary
+        if time_results or conf_results:
+            print(f"\n{'='*60}")
             print("TRAINING SUMMARY")
-            print("="*50)
-            for model_type, metrics in results.items():
-                print(f"\n{model_type}:")
-                for metric, value in metrics.items():
-                    print(f"  {metric}: {value:.4f}")
+            print('='*60)
+            
+            if time_results:
+                best_time_model = min(time_results, key=lambda x: time_results[x]['rmse'])
+                print(f"\nBest Time Model: {best_time_model}")
+                print(f"  RMSE: {time_results[best_time_model]['rmse']:.2f} months")
+            
+            if conf_results:
+                best_conf_model = max(conf_results, key=lambda x: conf_results[x]['accuracy'])
+                print(f"\nBest Confidence Model: {best_conf_model}")
+                print(f"  Accuracy: {conf_results[best_conf_model]['accuracy']:.4f}")
+        
+        print(f"\n✓ All models saved to: {model_path}")
         
     except FileNotFoundError:
         print("\n✗ Processed data not found. Please run option 2 first.")
