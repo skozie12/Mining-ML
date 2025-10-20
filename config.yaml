@@ -1,0 +1,129 @@
+# Project Configuration for Mining Permits ML
+
+project:
+  name: "Canadian Mining Permits Approval Prediction"
+  version: "0.1.0"
+  description: "ML model to predict likelihood of mining permit approval"
+
+data:
+  raw_data_path: "data/raw/"
+  processed_data_path: "data/processed/"
+  external_data_path: "data/external/"
+  
+  # Data collection settings
+  provinces:
+    - "British Columbia"
+    - "Ontario"
+    - "Quebec"
+    - "Saskatchewan"
+    - "Alberta"
+    - "Manitoba"
+    - "Newfoundland and Labrador"
+    - "Nova Scotia"
+    - "New Brunswick"
+    - "Yukon"
+    - "Northwest Territories"
+    - "Nunavut"
+
+model:
+  # Model saving location
+  model_path: "models/"
+  
+  # Random seed for reproducibility
+  random_state: 42
+  
+  # Train/test split ratio
+  test_size: 0.2
+  
+  # Cross-validation folds
+  cv_folds: 5
+  
+  # Models to evaluate
+  algorithms:
+    - "logistic_regression"
+    - "random_forest"
+    - "xgboost"
+    - "lightgbm"
+  
+  # Hyperparameter tuning
+  hyperparameter_tuning:
+    method: "grid_search"  # or "random_search"
+    n_iter: 50  # for random search
+  
+  # Random Forest parameters
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    min_samples_split: 5
+    min_samples_leaf: 2
+  
+  # XGBoost parameters
+  xgboost:
+    n_estimators: 100
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+  
+  # LightGBM parameters
+  lightgbm:
+    n_estimators: 100
+    max_depth: -1
+    learning_rate: 0.1
+    num_leaves: 31
+
+features:
+  # Categorical features
+  categorical:
+    - "province"
+    - "mining_type"
+    - "mineral_type"
+    - "company_size"
+  
+  # Numerical features
+  numerical:
+    - "project_area"
+    - "estimated_duration"
+    - "distance_to_water"
+    - "distance_to_protected_area"
+    - "expected_employment"
+  
+  # Feature engineering
+  create_interactions: true
+  polynomial_features: false
+  
+  # Feature scaling
+  scaling_method: "standard"  # or "minmax", "robust"
+
+evaluation:
+  # Metrics to track
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "roc_auc"
+  
+  # Threshold for binary classification
+  classification_threshold: 0.5
+  
+  # Feature importance analysis
+  calculate_feature_importance: true
+  calculate_shap_values: true
+
+reporting:
+  output_path: "reports/"
+  generate_plots: true
+  plot_format: "png"  # or "pdf", "svg"
+  
+  # Plots to generate
+  plots:
+    - "confusion_matrix"
+    - "roc_curve"
+    - "precision_recall_curve"
+    - "feature_importance"
+    - "learning_curves"
+
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/mining_ml.log"
