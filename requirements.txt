@@ -25,6 +25,12 @@ notebook>=6.4.0
 openpyxl>=3.0.9  # For Excel files
 pyyaml>=6.0  # For config files
 
+# Web Scraping
+requests>=2.28.0  # HTTP library
+beautifulsoup4>=4.11.0  # HTML parsing
+lxml>=4.9.0  # XML/HTML parser
+selenium>=4.8.0  # Browser automation (optional, for dynamic sites)
+
 # Utilities
 tqdm>=4.62.0  # Progress bars
 python-dateutil>=2.8.0
