@@ -1,80 +1,20 @@
 """
 NRCan Canadian Mining and Mineral Processing Atlas Scraper
-Focuses on mining operations and mineral processing facilities across     def get_nrcan_mines_database(self):
-        """
-        Search for NRCan's comprehensive mines database.
-        """
-        logger.info("
-🔍 Searching for NRCan Mines Database...")
+Focuses on mining operations and mineral processing facilities across         logger.info("\n🔍 Searching for NRCan Mines Database (All Provinces)...")
         
         search_terms = [
-            "mines database nrcan",
+            "national inventory abandoned mines",
+            "principal mineral areas canada",
+            "major mines canada",
             "canadian mines nrcan",
-            "active mines canada nrcan",
-            "mineral deposits canada nrcan",
-            "mining operations nrcan"
-        ]
-        
-        all_data = []
-        
-        for term in search_terms:
-            try:
-                search_url = f"{self.nrcan_endpoints['open_canada']}package_search"
-                params = {
-                    "q": term,
-                    "rows": 3,
-                    "fq": "organization:nrcan-rncan AND (res_format:CSV OR res_format:JSON)"
-                }
-                
-                response = self.session.get(search_url, params=params, timeout=15)
-                if response.status_code != 200:
-                    continue
-                    
-                data = response.json()
-                
-                if data['success'] and data['result']['results']:
-                    for dataset in data['result']['results']:
-                        title = dataset.get('title', '')
-                        
-                        # Filter for mining-specific datasets
-                        if any(kw in title.lower() for kw in ['mine', 'mineral', 'mining', 'deposit']):
-                            logger.info(f"   ✅ Found: {title[:60]}")
-                            
-                            for resource in dataset.get('resources', []):
-                                if resource.get('format', '').upper() in ['CSV', 'JSON']:
-                                    try:
-                                        url = resource['url']
-                                        logger.info(f"      ⬇️  Downloading {resource['format']}...")
-                                        
-                                        if resource['format'].upper() == 'CSV':
-                                            # Get ALL records instead of limiting to 150
-                                            df = pd.read_csv(url, low_memory=False, on_bad_lines='skip')
-                                        else:
-                                            df = pd.read_json(url)
-                                        
-                                        if not df.empty:
-                                            df['source'] = title
-                                            df['source_org'] = 'NRCan'
-                                            all_data.append(df)
-                                            logger.info(f"      ✅ Collected {len(df)} records")
-                                            
-                                            # Check jurisdiction distribution
-                                            if 'Jurisdiction' in df.columns:
-                                                logger.info(f"      📊 Jurisdictions: {df['Jurisdiction'].value_counts().to_dict()}")
-                                            break
-                                    except Exception as e:
-                                        logger.warning(f"      ⚠️  Error: {str(e)[:60]}")
-                                        continue
-                
-                time.sleep(0.5)
-                
-            except Exception as e:
-                logger.warning(f"   Error with search '{term}': {str(e)[:60]}")
-                continue
-        
-        return all_dataanada.
-
-Atlas URL: https://atlas.gc.ca/mins/en/index.html
+            "active mines canada",
+            "mineral deposits canada",
+            "mining operations canada",
+            "mines ontario nrcan",
+            "mines british columbia nrcan",
+            "mines quebec nrcan",
+            "mines alberta nrcan"
+        ]Atlas URL: https://atlas.gc.ca/mins/en/index.html
 
 This scraper accesses NRCan's actual data services including:
 - Principal Mineral Areas
@@ -220,7 +160,7 @@ class NRCanAtlasMiningCollector:
                 search_url = f"{self.nrcan_endpoints['open_canada']}package_search"
                 params = {
                     "q": term,
-                    "rows": 3,
+                    "rows": 5,
                     "fq": "organization:nrcan-rncan AND (res_format:CSV OR res_format:JSON)"
                 }
                 
@@ -245,16 +185,20 @@ class NRCanAtlasMiningCollector:
                                         logger.info(f"      ⬇️  Downloading {resource['format']}...")
                                         
                                         if resource['format'].upper() == 'CSV':
-                                            df = pd.read_csv(url, nrows=150, low_memory=False, on_bad_lines='skip')
+                                            # Get ALL records instead of limiting to 150
+                                            df = pd.read_csv(url, low_memory=False, on_bad_lines='skip')
                                         else:
                                             df = pd.read_json(url)
-                                            df = df.head(150)
                                         
                                         if not df.empty:
                                             df['source'] = title
                                             df['source_org'] = 'NRCan'
                                             all_data.append(df)
                                             logger.info(f"      ✅ Collected {len(df)} records")
+                                            
+                                            # Check jurisdiction distribution
+                                            if 'Jurisdiction' in df.columns:
+                                                logger.info(f"      📊 Jurisdictions: {df['Jurisdiction'].value_counts().to_dict()}")
                                             break
                                     except Exception as e:
                                         logger.warning(f"      ⚠️  Error: {str(e)[:60]}")

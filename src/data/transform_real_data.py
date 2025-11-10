@@ -135,8 +135,11 @@ def transform_quebec_data_to_standard(quebec_df, target_rows=100):
         if 'ID_CIBLE' in row.index and pd.notna(row['ID_CIBLE']):
             permit_ids.append(f"QC-{row['ID_CIBLE']}")
         elif 'OID' in row.index and pd.notna(row['OID']):
-            # NRCan data
-            permit_ids.append(f"NRCAN-{int(row['OID'])}")
+            # NRCan data - handle both numeric and string OIDs
+            try:
+                permit_ids.append(f"NRCAN-{int(row['OID'])}")
+            except (ValueError, TypeError):
+                permit_ids.append(f"NRCAN-{str(row['OID'])}")
         elif 'Name' in row.index and pd.notna(row['Name']):
             # Use name-based ID
             name_id = str(row['Name'])[:15].replace(' ', '-').replace('/', '-')
