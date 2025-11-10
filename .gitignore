@@ -43,9 +43,8 @@ venv.bak/
 .DS_Store
 
 # Data files (large files should not be committed)
-# Exception: keep formatted national dataset
-!data/raw/FORMATTED_NRCAN_NATIONAL.csv
 data/raw/*.csv
+!data/raw/FORMATTED_NRCAN_NATIONAL.csv
 data/raw/*.xlsx
 data/raw/*.json
 data/processed/*.csv
