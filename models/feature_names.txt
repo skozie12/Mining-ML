@@ -1,0 +1,15 @@
+project_area
+estimated_duration
+distance_to_water
+distance_to_protected_area
+distance_to_indigenous_land
+expected_employment
+environmental_assessment_score
+public_comments_received
+public_opposition_percentage
+company_compliance_history
+previous_permits
+province_encoded
+mining_type_encoded
+mineral_type_encoded
+company_size_encoded
